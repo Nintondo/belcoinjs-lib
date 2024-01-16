@@ -71,7 +71,7 @@ const DEFAULT_OPTS: PsbtOpts = {
    * THIS IS NOT TO BE RELIED ON.
    * It is only here as a last ditch effort to prevent sending a 500 BTC fee etc.
    */
-  maximumFeeRate: 5000, // satoshi per byte
+  maximumFeeRate: 10000, // satoshi per byte
 };
 
 /**
