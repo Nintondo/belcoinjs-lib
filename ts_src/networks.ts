@@ -16,7 +16,7 @@ interface Bip32 {
 
 export const bellcoin: Network = {
   messagePrefix: 'Bells Signed Message:\n',
-  bech32: '',
+  bech32: 'bel',
   bip32: {
     public: 0x043587cf,
     private: 0x04358394,
@@ -25,20 +25,9 @@ export const bellcoin: Network = {
   scriptHash: 30,
   wif: 0x99,
 };
-export const regtest: Network = {
-  messagePrefix: '\x18Bitcoin Signed Message:\n',
-  bech32: 'bcrt',
-  bip32: {
-    public: 0x043587cf,
-    private: 0x04358394,
-  },
-  pubKeyHash: 0x6f,
-  scriptHash: 0xc4,
-  wif: 0xef,
-};
 export const testnet: Network = {
   messagePrefix: 'Bells Signed Message:\n',
-  bech32: 'tb',
+  bech32: 'tbel',
   bip32: {
     public: 0x043587cf,
     private: 0x04358394,
