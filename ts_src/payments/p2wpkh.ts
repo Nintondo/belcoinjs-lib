@@ -1,5 +1,5 @@
 import * as bcrypto from '../crypto';
-import { bitcoin as BITCOIN_NETWORK } from '../networks';
+import { bellcoin as BITCOIN_NETWORK } from '../networks';
 import * as bscript from '../script';
 import { isPoint, typeforce as typef } from '../types';
 import { Payment, PaymentOpts } from './index';

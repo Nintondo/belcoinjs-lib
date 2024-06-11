@@ -1,4 +1,4 @@
-import { bitcoin as BITCOIN_NETWORK } from '../networks';
+import { bellcoin as BITCOIN_NETWORK } from '../networks';
 import * as bscript from '../script';
 import { typeforce as typef, stacksEqual } from '../types';
 import { Payment, PaymentOpts, Stack } from './index';

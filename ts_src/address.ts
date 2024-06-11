@@ -115,7 +115,7 @@ export function toBech32(
 
 export function fromOutputScript(output: Buffer, network?: Network): string {
   // TODO: Network
-  network = network || networks.bitcoin;
+  network = network || networks.bellcoin;
 
   try {
     return payments.p2pkh({ output, network }).address as string;
@@ -137,7 +137,7 @@ export function fromOutputScript(output: Buffer, network?: Network): string {
 }
 
 export function toOutputScript(address: string, network?: Network): Buffer {
-  network = network || networks.bitcoin;
+  network = network || networks.bellcoin;
 
   let decodeBase58: Base58CheckResult | undefined;
   let decodeBech32: Bech32Result | undefined;
