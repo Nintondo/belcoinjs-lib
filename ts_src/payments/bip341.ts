@@ -3,6 +3,7 @@ import * as bcrypto from '../crypto';
 
 import { varuint } from '../bufferutils';
 import { Tapleaf, Taptree, isTapleaf } from '../types';
+import { getEccLib } from '../ecc_lib';
 
 export const LEAF_VERSION_TAPSCRIPT = 0xc0;
 export const MAX_TAPTREE_DEPTH = 128;
@@ -17,6 +18,11 @@ interface HashBranch {
   right: HashTree;
 }
 
+interface TweakedPublicKey {
+  parity: number;
+  x: Buffer;
+}
+
 const isHashBranch = (ht: HashTree): ht is HashBranch =>
   'left' in ht && 'right' in ht;
 
@@ -28,6 +34,13 @@ const isHashBranch = (ht: HashTree): ht is HashBranch =>
  */
 export type HashTree = HashLeaf | HashBranch;
 
+/**
+ * Calculates the root hash from a given control block and leaf hash.
+ * @param controlBlock - The control block buffer.
+ * @param leafHash - The leaf hash buffer.
+ * @returns The root hash buffer.
+ * @throws {TypeError} If the control block length is less than 33.
+ */
 export function rootHashFromPath(
   controlBlock: Buffer,
   leafHash: Buffer,
@@ -109,6 +122,24 @@ export function tapTweakHash(pubKey: Buffer, h: Buffer | undefined): Buffer {
   );
 }
 
+export function tweakKey(
+  pubKey: Buffer,
+  h: Buffer | undefined,
+): TweakedPublicKey | null {
+  if (!NBuffer.isBuffer(pubKey)) return null;
+  if (pubKey.length !== 32) return null;
+  if (h && h.length !== 32) return null;
+
+  const tweakHash = tapTweakHash(pubKey, h);
+
+  const res = getEccLib().xOnlyPointAddTweak(pubKey, tweakHash);
+  if (!res || res.xOnlyPubkey === null) return null;
+
+  return {
+    parity: res.parity,
+    x: NBuffer.from(res.xOnlyPubkey),
+  };
+}
 
 function tapBranchHash(a: Buffer, b: Buffer): Buffer {
   return bcrypto.taggedHash('TapBranch', NBuffer.concat([a, b]));

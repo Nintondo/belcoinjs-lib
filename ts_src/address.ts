@@ -1,3 +1,12 @@
+/**
+ * bitcoin address decode and encode tools, include base58、bech32 and output script
+ *
+ * networks support bitcoin、bitcoin testnet and bitcoin regtest
+ *
+ * addresses support P2PKH、P2SH、P2WPKH、P2WSH、P2TR and so on
+ *
+ * @packageDocumentation
+ */
 import { Network } from './networks';
 import * as networks from './networks';
 import * as payments from './payments';
@@ -5,14 +14,22 @@ import * as bscript from './script';
 import { typeforce, tuple, Hash160bit, UInt8 } from './types';
 import { bech32, bech32m } from 'bech32';
 import * as bs58check from 'bs58check';
+
+/** base58check decode result */
 export interface Base58CheckResult {
+  /** address hash */
   hash: Buffer;
+  /** address version: 0x00 for P2PKH, 0x05 for P2SH */
   version: number;
 }
 
+/** bech32 decode result */
 export interface Bech32Result {
+  /** address version: 0x00 for P2WPKH、P2WSH, 0x01 for P2TR*/
   version: number;
+  /** address prefix: bc for P2WPKH、P2WSH、P2TR */
   prefix: string;
+  /** address data：20 bytes for P2WPKH, 32 bytes for P2WSH、P2TR */
   data: Buffer;
 }
 
@@ -52,6 +69,9 @@ function _toFutureSegwitAddress(output: Buffer, network: Network): string {
   return toBech32(data, version, network.bech32);
 }
 
+/**
+ * decode address with base58 specification,  return address version and address hash if valid
+ */
 export function fromBase58Check(address: string): Base58CheckResult {
   const payload = Buffer.from(bs58check.decode(address));
 
@@ -65,12 +85,17 @@ export function fromBase58Check(address: string): Base58CheckResult {
   return { version, hash };
 }
 
+/**
+ * decode address with bech32 specification,  return address version、address prefix and address data if valid
+ */
 export function fromBech32(address: string): Bech32Result {
   let result;
   let version;
   try {
     result = bech32.decode(address);
-  } catch (e) {}
+  } catch (e) {
+    //
+  }
 
   if (result) {
     version = result.words[0];
@@ -90,6 +115,9 @@ export function fromBech32(address: string): Bech32Result {
   };
 }
 
+/**
+ * encode address hash to base58 address with version
+ */
 export function toBase58Check(hash: Buffer, version: number): string {
   typeforce(tuple(Hash160bit, UInt8), arguments);
 
@@ -100,6 +128,9 @@ export function toBase58Check(hash: Buffer, version: number): string {
   return bs58check.encode(payload);
 }
 
+/**
+ * encode address hash to bech32 address with version and prefix
+ */
 export function toBech32(
   data: Buffer,
   version: number,
@@ -113,29 +144,50 @@ export function toBech32(
     : bech32m.encode(prefix, words);
 }
 
+/**
+ * decode address from output script with network, return address if matched
+ */
 export function fromOutputScript(output: Buffer, network?: Network): string {
   // TODO: Network
   network = network || networks.bellcoin;
 
   try {
     return payments.p2pkh({ output, network }).address as string;
-  } catch (e) {}
+  } catch (e) {
+    //
+  }
   try {
     return payments.p2sh({ output, network }).address as string;
-  } catch (e) {}
+  } catch (e) {
+    //
+  }
   try {
     return payments.p2wpkh({ output, network }).address as string;
-  } catch (e) {}
+  } catch (e) {
+    //
+  }
   try {
     return payments.p2wsh({ output, network }).address as string;
-  } catch (e) {}
+  } catch (e) {
+    //
+  }
+  try {
+    return payments.p2tr({ output, network }).address as string;
+  } catch (e) {
+    //
+  }
   try {
     return _toFutureSegwitAddress(output, network);
-  } catch (e) {}
+  } catch (e) {
+    //
+  }
 
   throw new Error(bscript.toASM(output) + ' has no matching Address');
 }
 
+/**
+ * encodes address to output script with network, return output script if address matched
+ */
 export function toOutputScript(address: string, network?: Network): Buffer {
   network = network || networks.bellcoin;
 
@@ -143,7 +195,9 @@ export function toOutputScript(address: string, network?: Network): Buffer {
   let decodeBech32: Bech32Result | undefined;
   try {
     decodeBase58 = fromBase58Check(address);
-  } catch (e) {}
+  } catch (e) {
+    //
+  }
 
   if (decodeBase58) {
     if (decodeBase58.version === network.pubKeyHash)
@@ -153,7 +207,9 @@ export function toOutputScript(address: string, network?: Network): Buffer {
   } else {
     try {
       decodeBech32 = fromBech32(address);
-    } catch (e) {}
+    } catch (e) {
+      //
+    }
 
     if (decodeBech32) {
       if (decodeBech32.prefix !== network.bech32)
@@ -163,6 +219,9 @@ export function toOutputScript(address: string, network?: Network): Buffer {
           return payments.p2wpkh({ hash: decodeBech32.data }).output as Buffer;
         if (decodeBech32.data.length === 32)
           return payments.p2wsh({ hash: decodeBech32.data }).output as Buffer;
+      } else if (decodeBech32.version === 1) {
+        if (decodeBech32.data.length === 32)
+          return payments.p2tr({ pubkey: decodeBech32.data }).output as Buffer;
       } else if (
         decodeBech32.version >= FUTURE_SEGWIT_MIN_VERSION &&
         decodeBech32.version <= FUTURE_SEGWIT_MAX_VERSION &&

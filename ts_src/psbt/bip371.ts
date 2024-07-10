@@ -1,9 +1,12 @@
 import { Taptree, Tapleaf, isTapleaf, isTaptree } from '../types';
 import {
   PsbtInput,
+  PsbtOutput,
   TapLeafScript,
   TapScriptSig,
   TapLeaf,
+  TapTree,
+  TapInternalKey,
 } from 'bip174/src/lib/interfaces';
 
 import { Transaction } from '../transaction';
@@ -11,12 +14,16 @@ import { Transaction } from '../transaction';
 import {
   witnessStackToScriptWitness,
   pubkeyPositionInScript,
+  isP2TR,
 } from './psbtutils';
 import {
+  tweakKey,
   tapleafHash,
+  rootHashFromPath,
   LEAF_VERSION_TAPSCRIPT,
   MAX_TAPTREE_DEPTH,
 } from '../payments/bip341';
+import { p2tr } from '../payments';
 
 import { signatureBlocksAction } from './psbtutils';
 
@@ -54,6 +61,106 @@ export function tapScriptFinalizer(
   }
 }
 
+export function serializeTaprootSignature(
+  sig: Buffer,
+  sighashType?: number,
+): Buffer {
+  const sighashTypeByte = sighashType
+    ? Buffer.from([sighashType!])
+    : Buffer.from([]);
+
+  return Buffer.concat([sig, sighashTypeByte]);
+}
+
+export function isTaprootInput(input: PsbtInput): boolean {
+  return (
+    input &&
+    !!(
+      input.tapInternalKey ||
+      input.tapMerkleRoot ||
+      (input.tapLeafScript && input.tapLeafScript.length) ||
+      (input.tapBip32Derivation && input.tapBip32Derivation.length) ||
+      (input.witnessUtxo && isP2TR(input.witnessUtxo.script))
+    )
+  );
+}
+
+export function isTaprootOutput(output: PsbtOutput, script?: Buffer): boolean {
+  return (
+    output &&
+    !!(
+      output.tapInternalKey ||
+      output.tapTree ||
+      (output.tapBip32Derivation && output.tapBip32Derivation.length) ||
+      (script && isP2TR(script))
+    )
+  );
+}
+
+export function checkTaprootInputFields(
+  inputData: PsbtInput,
+  newInputData: PsbtInput,
+  action: string,
+): void {
+  checkMixedTaprootAndNonTaprootInputFields(inputData, newInputData, action);
+  checkIfTapLeafInTree(inputData, newInputData, action);
+}
+
+export function checkTaprootOutputFields(
+  outputData: PsbtOutput,
+  newOutputData: PsbtOutput,
+  action: string,
+): void {
+  checkMixedTaprootAndNonTaprootOutputFields(outputData, newOutputData, action);
+  checkTaprootScriptPubkey(outputData, newOutputData);
+}
+
+function checkTaprootScriptPubkey(
+  outputData: PsbtOutput,
+  newOutputData: PsbtOutput,
+): void {
+  if (!newOutputData.tapTree && !newOutputData.tapInternalKey) return;
+
+  const tapInternalKey =
+    newOutputData.tapInternalKey || outputData.tapInternalKey;
+  const tapTree = newOutputData.tapTree || outputData.tapTree;
+
+  if (tapInternalKey) {
+    const { script: scriptPubkey } = outputData as any;
+    const script = getTaprootScripPubkey(tapInternalKey, tapTree);
+    if (scriptPubkey && !scriptPubkey.equals(script))
+      throw new Error('Error adding output. Script or address mismatch.');
+  }
+}
+
+function getTaprootScripPubkey(
+  tapInternalKey: TapInternalKey,
+  tapTree?: TapTree,
+): Buffer {
+  const scriptTree = tapTree && tapTreeFromList(tapTree.leaves);
+  const { output } = p2tr({
+    internalPubkey: tapInternalKey,
+    scriptTree,
+  });
+  return output!;
+}
+
+export function tweakInternalPubKey(
+  inputIndex: number,
+  input: PsbtInput,
+): Buffer {
+  const tapInternalKey = input.tapInternalKey;
+  const outputKey =
+    tapInternalKey && tweakKey(tapInternalKey, input.tapMerkleRoot);
+
+  if (!outputKey)
+    throw new Error(
+      `Cannot tweak tap internal key for input #${inputIndex}. Public key: ${
+        tapInternalKey && tapInternalKey.toString('hex')
+      }`,
+    );
+  return outputKey.x;
+}
 
 /**
  * Convert a binary tree to a BIP371 type list. Each element of the list is (according to BIP371):
@@ -189,7 +296,107 @@ function instertLeafInTree(
   if (rightSide) return [tree && tree[0], rightSide];
 }
 
+function checkMixedTaprootAndNonTaprootInputFields(
+  inputData: PsbtOutput,
+  newInputData: PsbtInput,
+  action: string,
+): void {
+  const isBadTaprootUpdate =
+    isTaprootInput(inputData) && hasNonTaprootFields(newInputData);
+  const isBadNonTaprootUpdate =
+    hasNonTaprootFields(inputData) && isTaprootInput(newInputData);
+  const hasMixedFields =
+    inputData === newInputData &&
+    isTaprootInput(newInputData) &&
+    hasNonTaprootFields(newInputData); // todo: bad? use !===
 
+  if (isBadTaprootUpdate || isBadNonTaprootUpdate || hasMixedFields)
+    throw new Error(
+      `Invalid arguments for Psbt.${action}. ` +
+        `Cannot use both taproot and non-taproot fields.`,
+    );
+}
+function checkMixedTaprootAndNonTaprootOutputFields(
+  inputData: PsbtOutput,
+  newInputData: PsbtOutput,
+  action: string,
+): void {
+  const isBadTaprootUpdate =
+    isTaprootOutput(inputData) && hasNonTaprootFields(newInputData);
+  const isBadNonTaprootUpdate =
+    hasNonTaprootFields(inputData) && isTaprootOutput(newInputData);
+  const hasMixedFields =
+    inputData === newInputData &&
+    isTaprootOutput(newInputData) &&
+    hasNonTaprootFields(newInputData);
+
+  if (isBadTaprootUpdate || isBadNonTaprootUpdate || hasMixedFields)
+    throw new Error(
+      `Invalid arguments for Psbt.${action}. ` +
+        `Cannot use both taproot and non-taproot fields.`,
+    );
+}
+
+/**
+ * Checks if the tap leaf is part of the tap tree for the given input data.
+ * Throws an error if the tap leaf is not part of the tap tree.
+ * @param inputData - The original PsbtInput data.
+ * @param newInputData - The new PsbtInput data.
+ * @param action - The action being performed.
+ * @throws {Error} - If the tap leaf is not part of the tap tree.
+ */
+function checkIfTapLeafInTree(
+  inputData: PsbtInput,
+  newInputData: PsbtInput,
+  action: string,
+): void {
+  if (newInputData.tapMerkleRoot) {
+    const newLeafsInTree = (newInputData.tapLeafScript || []).every(l =>
+      isTapLeafInTree(l, newInputData.tapMerkleRoot),
+    );
+    const oldLeafsInTree = (inputData.tapLeafScript || []).every(l =>
+      isTapLeafInTree(l, newInputData.tapMerkleRoot),
+    );
+    if (!newLeafsInTree || !oldLeafsInTree)
+      throw new Error(
+        `Invalid arguments for Psbt.${action}. Tapleaf not part of taptree.`,
+      );
+  } else if (inputData.tapMerkleRoot) {
+    const newLeafsInTree = (newInputData.tapLeafScript || []).every(l =>
+      isTapLeafInTree(l, inputData.tapMerkleRoot),
+    );
+    if (!newLeafsInTree)
+      throw new Error(
+        `Invalid arguments for Psbt.${action}. Tapleaf not part of taptree.`,
+      );
+  }
+}
+
+/**
+ * Checks if a TapLeafScript is present in a Merkle tree.
+ * @param tapLeaf The TapLeafScript to check.
+ * @param merkleRoot The Merkle root of the tree. If not provided, the function assumes the TapLeafScript is present.
+ * @returns A boolean indicating whether the TapLeafScript is present in the tree.
+ */
+function isTapLeafInTree(tapLeaf: TapLeafScript, merkleRoot?: Buffer): boolean {
+  if (!merkleRoot) return true;
+
+  const leafHash = tapleafHash({
+    output: tapLeaf.script,
+    version: tapLeaf.leafVersion,
+  });
+
+  const rootHash = rootHashFromPath(tapLeaf.controlBlock, leafHash);
+  return rootHash.equals(merkleRoot);
+}
+
+/**
+ * Sorts the signatures in the input's tapScriptSig array based on their position in the tapLeaf script.
+ *
+ * @param input - The PsbtInput object.
+ * @param tapLeaf - The TapLeafScript object.
+ * @returns An array of sorted signatures as Buffers.
+ */
 function sortSignatures(input: PsbtInput, tapLeaf: TapLeafScript): Buffer[] {
   const leafHash = tapleafHash({
     output: tapLeaf.script,
@@ -203,6 +410,12 @@ function sortSignatures(input: PsbtInput, tapLeaf: TapLeafScript): Buffer[] {
     .map(t => t.signature) as Buffer[];
 }
 
+/**
+ * Adds the position of a public key in a script to a TapScriptSig object.
+ * @param script The script in which to find the position of the public key.
+ * @param tss The TapScriptSig object to add the position to.
+ * @returns A TapScriptSigWitPosition object with the added position.
+ */
 function addPubkeyPositionInScript(
   script: Buffer,
   tss: TapScriptSig,
@@ -241,6 +454,14 @@ function findTapLeafToFinalize(
   return tapLeaf;
 }
 
+/**
+ * Determines whether a TapLeafScript can be finalized.
+ *
+ * @param leaf - The TapLeafScript to check.
+ * @param tapScriptSig - The array of TapScriptSig objects.
+ * @param hash - The optional hash to compare with the leaf hash.
+ * @returns A boolean indicating whether the TapLeafScript can be finalized.
+ */
 function canFinalizeLeaf(
   leaf: TapLeafScript,
   tapScriptSig: TapScriptSig[],
@@ -254,6 +475,23 @@ function canFinalizeLeaf(
   return (
     whiteListedHash &&
     tapScriptSig!.find(tss => tss.leafHash.equals(leafHash)) !== undefined
+  );
+}
+
+/**
+ * Checks if the given PsbtInput or PsbtOutput has non-taproot fields.
+ * Non-taproot fields include redeemScript, witnessScript, and bip32Derivation.
+ * @param io The PsbtInput or PsbtOutput to check.
+ * @returns A boolean indicating whether the given input or output has non-taproot fields.
+ */
+function hasNonTaprootFields(io: PsbtInput | PsbtOutput): boolean {
+  return (
+    io &&
+    !!(
+      io.redeemScript ||
+      io.witnessScript ||
+      (io.bip32Derivation && io.bip32Derivation.length)
+    )
   );
 }
 

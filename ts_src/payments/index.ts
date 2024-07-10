@@ -1,3 +1,10 @@
+/**
+ * Represents a payment object, which is used to create a payment.
+ *
+ * Supports P2PKH、P2SH、P2WPKH、P2WSH、P2TR and so on
+ *
+ * @packageDocumentation
+ */
 import { Network } from '../networks';
 import { Taptree } from '../types';
 import { p2data as embed } from './embed';
@@ -7,6 +14,7 @@ import { p2pkh } from './p2pkh';
 import { p2sh } from './p2sh';
 import { p2wpkh } from './p2wpkh';
 import { p2wsh } from './p2wsh';
+import { p2tr } from './p2tr';
 
 export interface Payment {
   name?: string;
@@ -42,7 +50,7 @@ export type StackElement = Buffer | number;
 export type Stack = StackElement[];
 export type StackFunction = () => Stack;
 
-export { embed, p2ms, p2pk, p2pkh, p2sh, p2wpkh, p2wsh };
+export { embed, p2ms, p2pk, p2pkh, p2sh, p2wpkh, p2wsh, p2tr };
 
 // TODO
 // witness commitment
