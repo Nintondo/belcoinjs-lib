@@ -3,7 +3,7 @@ import * as bcrypto from '../crypto';
 
 import { varuint } from '../bufferutils';
 import { Tapleaf, Taptree, isTapleaf } from '../types';
-import { getEccLib } from '../ecc_lib';
+import { xOnlyPointAddTweak } from 'bells-secp256k1';
 
 export const LEAF_VERSION_TAPSCRIPT = 0xc0;
 export const MAX_TAPTREE_DEPTH = 128;
@@ -132,7 +132,7 @@ export function tweakKey(
 
   const tweakHash = tapTweakHash(pubKey, h);
 
-  const res = getEccLib().xOnlyPointAddTweak(pubKey, tweakHash);
+  const res = xOnlyPointAddTweak(pubKey, tweakHash);
   if (!res || res.xOnlyPubkey === null) return null;
 
   return {

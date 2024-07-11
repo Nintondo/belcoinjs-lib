@@ -19,7 +19,7 @@ import { Payment, PaymentOpts } from './index';
 import * as lazy from './lazy';
 import { bech32m } from 'bech32';
 import { fromBech32 } from '../address';
-import { getEccLib } from '../ecc_lib';
+import { isXOnlyPoint } from 'bells-secp256k1';
 
 const OPS = bscript.OPS;
 const TAPROOT_WITNESS_VERSION = 0x01;
@@ -223,8 +223,7 @@ export function p2tr(a: Payment, opts?: PaymentOpts): Payment {
     }
 
     if (pubkey && pubkey.length) {
-      if (!getEccLib().isXOnlyPoint(pubkey))
-        throw new TypeError('Invalid pubkey for p2tr');
+      if (!isXOnlyPoint(pubkey)) throw new TypeError('Invalid pubkey for p2tr');
     }
 
     const hashTree = _hashTree();
@@ -296,7 +295,7 @@ export function p2tr(a: Payment, opts?: PaymentOpts): Payment {
         if (a.internalPubkey && !a.internalPubkey.equals(internalPubkey))
           throw new TypeError('Internal pubkey mismatch');
 
-        if (!getEccLib().isXOnlyPoint(internalPubkey))
+        if (!isXOnlyPoint(internalPubkey))
           throw new TypeError('Invalid internalPubkey for p2tr witness');
 
         const leafVersion = controlBlock[0] & TAPLEAF_VERSION_MASK;
