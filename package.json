@@ -1,6 +1,6 @@
 {
   "name": "belcoinjs-lib",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Client-side Bells JavaScript library",
   "main": "./src/index.js",
   "types": "./src/index.d.ts",
@@ -54,7 +54,8 @@
     "bells-secp256k1": "0.1.0",
     "bip174": "2.1.1",
     "bs58check": "3.0.1",
-    "varuint-bitcoin": "1.1.2"
+    "varuint-bitcoin": "1.1.2",
+    "typeforce": "1.18.0"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.45.0",
