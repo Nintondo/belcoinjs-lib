@@ -1,6 +1,6 @@
 {
   "name": "belcoinjs-lib",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Client-side Bells JavaScript library",
   "main": "./src/index.js",
   "types": "./src/index.d.ts",
@@ -51,7 +51,7 @@
   "dependencies": {
     "@noble/hashes": "1.3.3",
     "bech32": "2.0.0",
-    "bells-secp256k1": "0.1.0",
+    "bells-secp256k1": "0.1.1",
     "bip174": "2.1.1",
     "bs58check": "3.0.1",
     "varuint-bitcoin": "1.1.2",
